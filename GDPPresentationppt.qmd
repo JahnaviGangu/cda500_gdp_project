@@ -1,0 +1,233 @@
+---
+title: "GDP Forecasting using AutoARIMA and ETS"
+format: revealjs
+editor: visual
+author: Jahnavi Gangu
+---
+
+## Contents
+
+-   Project Overview
+-   Aim of the Project
+-   Data Description
+-   Data Cleaning & Empirical Data Analysis
+-   Notation and Mathematical Background of Models
+-   Model Analysis(ARIMA and ETS)
+-   Forecasting
+-   Cross-Validation Results
+-   Conclusion
+
+## Project Overview
+
+![](images/gdp_image.jpeg){fig-align="center" width="210"}
+
+-   This project focuses on analyzing the Gross Domestic Product (GDP) data to forecast future values using statistical models.
+
+```{r}
+#| label: Load packages
+#| output: false
+
+library(tidyverse)
+library(fredr)
+library(forecast)
+library(imputeTS)
+library(gridExtra)
+fredr_set_key("c387f7cbc3f36a5a52a03d391d17e253")
+GDP_data <- fredr(series_id = "GDP")
+numeric_GDP_data <- GDP_data %>%
+  select(value) 
+missing_values <- sum(is.na(numeric_GDP_data$value))
+if (missing_values > 0) 
+  {
+  numeric_GDP_data$value <- na_interpolation(numeric_GDP_data$value)
+}
+target_variable <- numeric_GDP_data$value
+autoarima_fit <- auto.arima(target_variable)
+ets_fit <- ets(target_variable)
+forecast_horizon <- 12
+ets_forecast <- forecast(ets_fit, h = forecast_horizon)
+autoarima_forecast <- forecast(autoarima_fit, h = forecast_horizon)
+kfold_cv <- function(model_fit, data, forecast_horizon, k = 10) {
+  folds <- cut(1:nrow(data), breaks = k, labels = FALSE)
+  rmse_errors <- rep(NA, k)
+  mae_errors <- rep(NA, k)
+  mape_errors <- rep(NA, k)
+  for (i in 1:k) {
+    training_set <- data[folds != i, ]
+    testing_set <- data[folds == i, ]
+    training_set <- na.omit(training_set)
+    testing_set <- na.omit(testing_set)
+    
+    model <- model_fit(training_set)
+    forecast <- forecast(model, h = forecast_horizon)
+    forecast_values <- forecast$mean
+    actual_values <- head(testing_set$value, length(forecast_values))
+    rmse_errors[i] <- sqrt(mean((actual_values - forecast_values)^2))
+    mae_errors[i] <- mean(abs(actual_values - forecast_values))
+    mape_errors[i] <- mean(abs((actual_values - forecast_values) / actual_values) * 100)
+  }
+  data.frame(
+    Fold = 1:k,
+    RMSE = rmse_errors,
+    MAE = mae_errors,
+    MAPE = mape_errors
+  )
+}
+autoarima_cv <- kfold_cv(function(data) auto.arima(data$value), GDP_data, forecast_horizon)
+ets_cv <- kfold_cv(function(data) ets(ts(data$value, frequency = 4)), GDP_data, forecast_horizon)
+autoarima_forecast_1 <- forecast(autoarima_fit, h = 1)$mean
+ets_forecast_1 <- forecast(ets_fit, h = 1)$mean
+```
+
+## Aim of the Project
+
+-   The main aim of this project is to provide accurate future forecasts of GDP using time series analysis.
+
+```{r gdp-plot, echo=FALSE, fig.align='right'}
+# Assuming you have already loaded the GDP_data and necessary libraries
+plot(GDP_data$date, GDP_data$value, type = "l", xlab = "Date", ylab = "GDP", main = "GDP Over Time")
+```
+
+## Data Description:
+
+-   The dataset contains historical GDP data with 312 observations, detailing GDP trends over time. Key variables include the date (for temporal analysis), GDP value (with some missing values), and consistent start/end dates of data collection.
+
+```{r}
+head(GDP_data)
+```
+
+## Data Cleaning & Emperical Data Analysis:
+
+-   Extracted only the 'value' column from the GDP dataset, focusing on the quantitative data for analysis and Identified missing values within the GDP data.
+-   Applied na_interpolation to fill in missing GDP values, ensuring a continuous dataset for reliable analysis. Created a clean, complete dataset, essential for accurate trend analysis and forecasting.
+-   **Conclusion:** Effective data cleaning ensures the foundation for our empirical analysis is robust, facilitating reliable insights into GDP trends.
+
+```{r}
+numeric_GDP_data <- GDP_data %>%
+  select(value) 
+missing_values <- sum(is.na(numeric_GDP_data$value))
+if (missing_values > 0) {
+  numeric_GDP_data$value <- na_interpolation(numeric_GDP_data$value)
+}
+```
+
+## Notation and Mathematical Background of The Models
+
+-   AutoARIMA model-Notation: ARIMA(p, d, q) -Mathematical Background: -Iterative process to automatically select optimal values for p, d, and q.
+
+-   ETS Model-Notation: ETS(error, trend, seasonality) -Mathematical Background: -Based on state space models, decomposing data into error, trend, and seasonality components.
+
+```{r}
+
+```
+
+## Model Summary: AutoARIMA
+
+-   The ARIMA(0,2,2) model proficiently forecasts GDP trends, as indicated by its significant moving average components and validated by low AIC, BIC, RMSE, and MAE values.
+
+```{r}
+summary(autoarima_fit)
+```
+
+## ACF Plot: AutoARIMA
+
+```{r}
+acf_plot <- autoplot(acf(autoarima_fit$residuals))
+
+```
+
+-   The ACF plot indicates that there are no significant autocorrelations for the residuals of the AutoARIMA model, as all lags are within the confidence bounds, suggesting that the model has adequately captured the time series data without leaving any systematic patterns in the residuals.
+
+## PACF Plot: AutoARIMA
+
+```{r}
+pacf_plot <- autoplot(pacf(autoarima_fit$residuals))
+```
+
+-   The PACF plot shows that all partial autocorrelations for the residuals of the AutoARIMA model are within the confidence intervals, indicating no significant correlations at any lag and suggesting a well-fitting model.
+
+## Model Summary: ETS
+
+-   The ETS(M,A,N) model with high responsiveness to data changes provides precise forecasts, as evidenced by low error variance. Model comparisons using AIC and BIC, along with low RMSE and MAPE values, indicate a strong and accurate fit to the data without seasonal components.
+
+```{r}
+summary(ets_fit)
+```
+
+## ACF Plot: ETS
+
+```{r}
+acf_plot <- autoplot(acf(ets_fit$residuals))
+
+```
+
+-   The ACF plot for the ETS model shows no significant autocorrelations at any lag, suggesting the model residuals are random and the model has captured the time series data adequately.
+
+## PACF Plot: ETS
+
+```{r}
+pacf_plot <- autoplot(pacf(ets_fit$residuals))
+
+```
+
+-   The PACF plot for the ETS model indicates that partial autocorrelations are within the confidence bounds for all lags, suggesting no significant autocorrelation and that the model captures the underlying data structure well.
+
+## Forecast: ETS
+
+```{r}
+autoplot(forecast(ets_fit, h = 12))
+
+```
+
+## Forecast: AutoARIMA
+
+```{r}
+autoplot(forecast(autoarima_fit, h = 12))
+```
+
+-   The forecast plot from the AutoARIMA model displays the time series data with a projected forecast, including a confidence interval, indicating an upward trend in the target variable.
+
+## **K-Fold Cross-Validation for Forecasting**
+
+1.  Validates the forecasting model's performance by segmenting the data into 'k' parts, cycling each as a test set against a training set. It ensures robustness and generalization of the model by preventing overfitting and assessing predictive accuracy on various data segments.
+
+2.  Applied to AutoARIMA and ETS models on GDP data, employing a custom function to maintain the time series' order during validation.
+
+3.  Cross-validation results highlight the range of predictive errors, providing a comprehensive view of model consistency and effectiveness.
+
+## AutoARIMA K-Fold CV Results
+
+```{r}
+print(summary(autoarima_cv))
+```
+
+-   The AutoARIMA K-Fold CV results show a wide range of MAPE values from 2.385% to over 11,342.265%, indicating variability in the model's percentage error across different folds and suggesting that the model's predictive accuracy may vary significantly depending on the data subset being considered.
+
+## ETS K-Fold CV Results
+
+```{r}
+print(summary(ets_cv))
+```
+
+-   The ETS K-Fold CV results exhibit a significant spread in performance metrics, particularly in MAPE, which ranges from as low as 3.17% to as high as 11,407.47%, indicating substantial variability in the model's prediction accuracy across different segments of the data.
+
+## Final Forecast Results
+
+```{r}
+print("AutoARIMA One-Step Ahead Forecast:")
+print(autoarima_forecast_1)
+print("ETS One-Step Ahead Forecast:")
+print(ets_forecast_1)
+```
+
+-   The AutoARIMA and ETS models predict the one-step ahead GDP forecast to be 28,318.05 and 28,346.16 respectively, showcasing their close forecasting capabilities.
+
+## Conclusion
+
+1.  Utilized a robust validation method specifically adapted for the sequential nature of time series data, ensuring the reliability of our forecasting models.
+
+2.  Tested AutoARIMA and ETS models extensively, which revealed variability in their predictive performance across different segments of the data. Observed a wide range in error metrics, suggesting that model performance can fluctuate, necessitating careful consideration in model application.
+
+3.  The results indicate potential avenues for model refinement and the exploration of combining models to improve forecasting accuracy and reliability.
+
+# Thank You!!

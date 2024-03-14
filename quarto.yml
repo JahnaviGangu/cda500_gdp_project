@@ -1,0 +1,26 @@
+project:
+  type: website
+  output-dir: docs
+
+website:
+  title: "GDP Forecasting using AutoARIMA and ETS"
+  navbar:
+    left:
+      - text: "Home"
+        href: index.qmd
+      - text: "About"
+        href: about.qmd
+
+format:
+  revealjs:
+    self-contained: true
+    theme: "black"
+    transition: "slide"
+    css: styles.css
+    slide-number: true
+    center: true
+    width: 1280
+    height: 720
+    margin: 0.1
+    minScale: 0.2
+    maxScale: 1.5
